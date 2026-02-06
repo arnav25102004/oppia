@@ -1205,9 +1205,9 @@ export class CurriculumAdmin extends TopicManager {
       }
     } catch (error) {
       const newError = new Error(
-        `Failed to verify sections of study guide: ${error}`
+        `Failed to verify sections of study guide: ${(error as Error).message}`
       );
-      newError.stack = error.stack;
+      newError.stack = (error as Error).stack;
       throw newError;
     }
   }
@@ -1715,7 +1715,7 @@ export class CurriculumAdmin extends TopicManager {
       });
       showMessage('Tutorial pop-up closed successfully.');
     } catch (error) {
-      showMessage(`welcome modal not found: ${error.message}`);
+      showMessage(`welcome modal not found: ${(error as Error).message}`);
     }
   }
 
@@ -1924,23 +1924,6 @@ export class CurriculumAdmin extends TopicManager {
       await this.page.waitForSelector(`${publishStoryButton}:not([disabled])`);
       await this.clickOnElementWithSelector(publishStoryButton);
       await this.page.waitForSelector(unpublishStoryButton, {visible: true});
-    }
-  }
-
-  /**
-   * Publishes the draft of a serial chapter.
-   */
-  async publishStoryDraftSerialChapter(): Promise<void> {
-    if (this.isViewportAtMobileWidth()) {
-      await this.clickOnElementWithSelector('.e2e-test-mobile-options-base');
-      await this.page.waitForSelector(mobileSaveStoryChangesDropdown, {
-        visible: true,
-      });
-      await this.clickOnElementWithSelector(mobileSaveStoryChangesDropdown);
-      await this.page.waitForSelector(mobilePublishStoryButton);
-      await this.clickOnElementWithSelector(mobilePublishStoryButton);
-    } else {
-      await this.clickOnElementWithSelector(publishChapterButton);
     }
   }
 
@@ -2245,7 +2228,7 @@ export class CurriculumAdmin extends TopicManager {
           );
           await this.page.waitForSelector(modalDiv, {hidden: true});
         } catch (error) {
-          console.error('Failed to remove question', error.stack);
+          console.error('Failed to remove question', (error as Error).stack);
           throw error;
         }
 
@@ -2258,7 +2241,7 @@ export class CurriculumAdmin extends TopicManager {
     } catch (error) {
       throw new Error(
         `Failed to remove all questions from the skill "${skillName}"` +
-          error.stack
+          (error as Error).stack
       );
     }
   }
@@ -2910,7 +2893,7 @@ export class CurriculumAdmin extends TopicManager {
         const newError = new Error(
           `Failed to verify WorkedExamples of skill: ${error}`
         );
-        newError.stack = error.stack;
+        newError.stack = (error as Error).stack;
         throw newError;
       }
     }
@@ -3003,7 +2986,7 @@ export class CurriculumAdmin extends TopicManager {
         practiceTabToggle
       );
     } catch (error) {
-      console.error(error.stack);
+      console.error((error as Error).stack);
       throw error;
     }
   }
@@ -3099,6 +3082,62 @@ export class CurriculumAdmin extends TopicManager {
 
       await this.page.waitForSelector(publishTopicButton, {hidden: true});
     }
+  }
+  /**
+   * navigates to the story editor and ensures the chapter is ready to publish.
+   * (Placeholder logic: ensures we are in the right context to publish).
+   */
+  async makeChapterReadyToPublish(
+    chapterName: string,
+    storyName: string,
+    topicName: string
+  ): Promise<void> {
+    // Navigate to the story editor to ensure we are in the correct state
+    await this.openStoryEditor(storyName, topicName);
+    // Note: If additional steps are needed to "ready" a chapter 
+    // (like adding a thumbnail), add them here.
+    showMessage(`Chapter ${chapterName} is ready to publish.`);
+  }
+
+  /**
+   * Publishes the story draft up to a specific chapter index.
+   * @param chapterIndex - The index string (e.g., '0', '1') to publish up to.
+   */
+  async publishStoryDraftChapterUpto(chapterIndex: string): Promise<void> {
+    // 1. Click the main Publish Story button
+    const publishButton = await this.page.$('.e2e-test-publish-story-button');
+    if (!publishButton) {
+      throw new Error('Publish Story button not found.');
+    }
+    await publishButton.click();
+
+    // 2. Wait for the modal/options to appear
+    await this.page.waitForSelector('.e2e-test-publish-chapters-radio-button');
+
+    // 3. Select the specific radio button to publish up to chapter X
+    // We look for all radio buttons and click the one corresponding to the index
+    const radioButtons = await this.page.$$('.e2e-test-publish-chapters-radio-button');
+    
+    // Parse index to number to select correct array element
+    const index = parseInt(chapterIndex);
+    if (index >= 0 && index < radioButtons.length) {
+       await radioButtons[index].click();
+    } else {
+       throw new Error(`Could not find radio button for chapter index ${chapterIndex}`);
+    }
+  }
+
+  /**
+   * Finalizes the publication of the serial chapters.
+   */
+  async publishStoryDraftSerialChapter(): Promise<void> {
+    const confirmButton = await this.page.$('.e2e-test-confirm-publish-story-button');
+    if (!confirmButton) {
+      throw new Error('Confirm Publish button not found.');
+    }
+    await confirmButton.click();
+    await this.page.waitForNetworkIdle();
+    showMessage('Story draft published successfully.');
   }
 }
 

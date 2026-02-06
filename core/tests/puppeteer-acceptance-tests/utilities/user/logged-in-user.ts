@@ -4667,14 +4667,44 @@ export class LoggedInUser extends BaseUser {
   async expectUsernameToBe(expectedUsername: string): Promise<void> {
     await this.expectTextContentToBe(usernameSelector, expectedUsername);
   }
-
+/**
+   * Verifies that a specific lesson card has the 'New' label.
+   * This is used to test that unseen chapters are marked correctly.
+   */
   async expectLessonCardToHaveNewLabel(chapterName: string): Promise<void> {
     const lessonSel = learnerDashSelectors.lessonCard;
-
     await this.page.waitForSelector(lessonSel.content);
-
     const cards = await this.page.$$(lessonSel.content);
 
+    for (const card of cards) {
+      const titleEl = await card.$(lessonSel.heading);
+      const titleText = titleEl 
+        ? await titleEl.evaluate(el => el.textContent?.trim()) 
+        : '';
+
+      if (titleText?.includes(chapterName)) {
+        const labelEl = await card.$(lessonSel.newLabel); 
+        if (!labelEl) {
+           throw new Error(`Expected chapter "${chapterName}" to have a "New" label, but it was not found.`);
+        }
+        showMessage(`Chapter "${chapterName}" has 'New' label as expected`);
+        return;
+      }
+    }
+    throw new Error(`Chapter "${chapterName}" not found.`);
+  }
+
+  /**
+   * Verifies whether a chapter/lesson is clickable or grayed out (disabled).
+   */
+  async expectChapterToBeClickable(
+    chapterName: string,
+    clickable: boolean = true
+  ): Promise<void> {
+    const lessonSel = learnerDashSelectors.lessonCard;
+    await this.page.waitForSelector(lessonSel.content);
+    const cards = await this.page.$$(lessonSel.content);
+    
     for (const card of cards) {
       const titleEl = await card.$(lessonSel.heading);
       const titleText = titleEl
@@ -4682,21 +4712,36 @@ export class LoggedInUser extends BaseUser {
         : '';
 
       if (titleText?.includes(chapterName)) {
-        const newLabel = await card.$('.e2e-test-new-label');
-
-        if (!newLabel) {
-          throw new Error(
-            `Lesson "${chapterName}" found but does NOT have New label`
-          );
+        const buttonEl = await card.$(lessonSel.button);
+        if (!buttonEl) {
+          throw new Error(`Button not found for chapter "${chapterName}"`);
         }
-        showMessage(`Lesson "${chapterName}" has New label`);
+
+        const isDisabled = await buttonEl.evaluate(el => {
+          const button = el as HTMLElement;
+          const style = window.getComputedStyle(button);
+          
+          return button.getAttribute('aria-disabled') === 'true' ||
+                 (button as HTMLButtonElement).disabled === true ||
+                 button.classList.contains('disabled') ||
+                 button.classList.contains('grayed-out') ||
+                 style.pointerEvents === 'none' ||
+                 parseFloat(style.opacity) < 0.6;
+        });
+
+        if (clickable && isDisabled) {
+          throw new Error(`Chapter "${chapterName}" is expected to be clickable but is disabled.`);
+        }
+        if (!clickable && !isDisabled) {
+          throw new Error(`Chapter "${chapterName}" is expected to be disabled but is clickable.`);
+        }
+
+        showMessage(`Chapter "${chapterName}" is ${clickable ? 'clickable' : 'grayed out'} as expected`);
         return;
       }
     }
-
-    throw new Error(`Lesson "${chapterName}" not found`);
+    throw new Error(`Chapter "${chapterName}" not found in lesson cards`);
   }
-
   /**
    * Check if available lesson list has chapters
    * @param chapterNames - The array of chapter names
